@@ -117,6 +117,11 @@ static dispatch_queue_t YYTextAsyncLayerGetReleaseQueue(void) {
 #pragma mark - Private
 
 - (void)_displayAsync:(BOOL)async {
+    if (CGRectIsEmpty(self.bounds)) {
+        self.contents = nil;
+        return;
+    }
+    
     __strong id<YYTextAsyncLayerDelegate> delegate = (id)self.delegate;
     YYTextAsyncLayerDisplayTask *task = [delegate newAsyncDisplayTask];
     if (!task.display) {
@@ -200,10 +205,22 @@ static dispatch_queue_t YYTextAsyncLayerGetReleaseQueue(void) {
     } else {
         [_sentinel increase];
         if (task.willDisplay) task.willDisplay(self);
-        UIGraphicsImageRendererFormat *format = [[UIGraphicsImageRendererFormat alloc] init];
-        format.opaque = self.opaque;
-        format.scale = self.contentsScale;
+        
+        UIImage *image = [self _imageFromContextWithDisplayTask:task];
+        self.contents = (__bridge id)(image.CGImage);
+        
+        if (task.didDisplay) task.didDisplay(self, YES);
+    }
+}
 
+- (UIImage *)_imageFromContextWithDisplayTask:(YYTextAsyncLayerDisplayTask *)task {
+    if (@available(iOS 10.0, *)) {
+        UIGraphicsImageRendererFormat *format = ({
+            UIGraphicsImageRendererFormat *format = [[UIGraphicsImageRendererFormat alloc] init];
+            format.opaque = self.opaque;
+            format.scale = self.contentsScale;
+            format;
+        });
         UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:self.bounds.size format:format];
         UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext * _Nonnull rendererContext) {
             CGContextRef context = rendererContext.CGContext;
@@ -226,9 +243,31 @@ static dispatch_queue_t YYTextAsyncLayerGetReleaseQueue(void) {
             }
             task.display(context, self.bounds.size, ^{return NO;});
         }];
-
-        self.contents = (__bridge id)(image.CGImage);
-        if (task.didDisplay) task.didDisplay(self, YES);
+        return image;
+    } else {
+        UIGraphicsBeginImageContextWithOptions(self.bounds.size, self.opaque, self.contentsScale);
+        CGContextRef context = UIGraphicsGetCurrentContext();
+        if (self.opaque && context) {
+            CGSize size = self.bounds.size;
+            size.width *= self.contentsScale;
+            size.height *= self.contentsScale;
+            CGContextSaveGState(context); {
+                if (!self.backgroundColor || CGColorGetAlpha(self.backgroundColor) < 1) {
+                    CGContextSetFillColorWithColor(context, [UIColor whiteColor].CGColor);
+                    CGContextAddRect(context, CGRectMake(0, 0, size.width, size.height));
+                    CGContextFillPath(context);
+                }
+                if (self.backgroundColor) {
+                    CGContextSetFillColorWithColor(context, self.backgroundColor);
+                    CGContextAddRect(context, CGRectMake(0, 0, size.width, size.height));
+                    CGContextFillPath(context);
+                }
+            } CGContextRestoreGState(context);
+        }
+        task.display(context, self.bounds.size, ^{return NO;});
+        UIImage *image = UIGraphicsGetImageFromCurrentImageContext();
+        UIGraphicsEndImageContext();
+        return image;
     }
 }
 
