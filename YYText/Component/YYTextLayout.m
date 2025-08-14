@@ -894,14 +894,15 @@ fail:
     return [self layoutWithContainers:containers text:text range:NSMakeRange(0, text.length)];
 }
 
-+ (NSArray *)layoutWithContainers:(NSArray *)containers text:(NSAttributedString *)text range:(NSRange)range {
++ (NSArray<YYTextLayout *> *)layoutWithContainers:(NSArray *)containers text:(NSAttributedString *)text range:(NSRange)range {
     if (!containers || !text) return nil;
     if (range.location + range.length > text.length) return nil;
-    NSMutableArray *layouts = [NSMutableArray array];
+    NSMutableArray<YYTextLayout *> *layouts = [NSMutableArray array];
     for (NSUInteger i = 0, max = containers.count; i < max; i++) {
         YYTextContainer *container = containers[i];
         YYTextLayout *layout = [self layoutWithContainer:container text:text range:range];
         if (!layout) return nil;
+        [layouts addObject:layout];
         NSInteger length = (NSInteger)range.length - (NSInteger)layout.visibleRange.length;
         if (length <= 0) {
             range.length = 0;
