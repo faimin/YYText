@@ -25,6 +25,7 @@ let package = Package(
             ],
             publicHeadersPath: "include",
             cSettings: [
+                .headerSearchPath("include"),
                 .define("YYTEXT_ENABLE_SHORTHAND", to: "1")
             ],
             linkerSettings: [
